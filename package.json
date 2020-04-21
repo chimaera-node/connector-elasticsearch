@@ -1,0 +1,21 @@
+{
+  "name": "@chimaera/connector-elasticsearch",
+  "version": "0.0.1",
+  "description": "connects to elasticsearch",
+  "author": "Richard Tong",
+  "license": "UNLICENSED",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "github:chimaera-node/connector-elasticsearch"
+  },
+  "dependencies": {
+    "@elastic/elasticsearch": "^7.6.0",
+    "@chimaera/exception": "latest",
+    "@chimaera/uri": "latest",
+    "rubico": "latest"
+  },
+  "devDependencies": {
+    "a-sert": "latest"
+  }
+}
