@@ -12,6 +12,7 @@
   "dependencies": {
     "@elastic/elasticsearch": "^7.6.0",
     "@chimaera/exception": "latest",
+    "@chimaera/query-lexer": "latest",
     "@chimaera/uri": "latest",
     "rubico": "latest"
   },
