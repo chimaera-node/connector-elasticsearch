@@ -132,5 +132,34 @@ describe('connectorElasticsearch', () => {
         },
       ],
     }))
+
+    it('transforms a lexed query object to elasticsearch query dsl - sort', () => _.flow(
+      _.map(connectorElasticsearch.toQueryDSL),
+      a.eq(_.id, [
+        { b: { order: 'asc' } },
+        { c: { order: 'desc' } },
+        { gauss: { l: { origin: '1998-01-01', scale: '1825d' } } },
+        { gauss: { m: { origin: { lat: 34, lon: -118 }, scale: '100mi' } } },
+        { fieldValueFactor: { field: 'n', factor: 5, missing: 0, modifier: 'ln2p' } },
+      ]),
+    )([
+      { operator: 'asc', field: 'b', values: [] },
+      { operator: 'desc', field: 'c', values: [] },
+      {
+        operator: 'gauss',
+        field: 'l',
+        values: [{ origin: '1998-01-01', scale: '1825d' }],
+      },
+      {
+        operator: 'gauss',
+        field: 'm',
+        values: [{ origin: { lat: 34, lon: -118 }, scale: '100mi' }],
+      },
+      {
+        operator: 'fieldValueFactor',
+        field: 'n',
+        values: [{ factor: 5, missing: 0, modifier: 'ln2p' }],
+      },
+    ]))
   })
 })
