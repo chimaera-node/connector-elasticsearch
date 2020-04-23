@@ -113,38 +113,164 @@ const del = config => client => _.flow(
   _.noop,
 )
 
-// config {...} => client {...} => query {
-//   query: $ => ({
-//     filter: $.and(
-//       $.eq('a', 'hey'), // term
-//       $.like('b', 'yo'), // match (fuzzy)
-//       $.gte('c', 1), $.lte('c', 6), // range
-//       $.exists('d'), // exists
-//       $.or(
-//         $.eq('e', 'hey', 'yo'), // terms
-//         $.eq('path.to.f', 'hey', 'yo'), // nested terms
-//         $.geo('g', { lat: 123, lon: 21, distance: '50mi' }), // geo distance
-//       ),
-//     ),
-//     sort: $.orderBy($.asc('c'), $.desc('d')),
-//     sort: $.functionScore(
-//       $.gauss('l', { origin: '1998-01-01', scale: '1825d' }),
-//       $.gauss('m', { origin: { lat: 34, lon: -118 }, scale: '100mi' }),
-//       $.fieldValueFactor('n', { factor: 5, missing: 0, modifier: 'ln2p' }),
-//     ),
-//     limit: 100,
-//     cursor: any|null,
-//   }),
-// } => query_result {
-//   result: [{ _id: '1', _source: {...}, [_score: 5] }],
-//   cursor: any|null,
-//   meta: {
-//     count: 100,
-//   },
-// }
+const toQueryDSL = x => {
+  if (x.operator === 'and') return {
+    bool: { filter: _.map.sync(toQueryDSL)(x.operations) },
+  }
+  if (x.operator === 'or') return {
+    dis_max: { queries: _.map.sync(toQueryDSL)(x.operations) },
+  }
+  if (x.operator === 'eq') {
+    if (x.values.length < 1) {
+      throw exception.MalformedQuery('eq value[s] required')
+    }
+    if (x.values.length === 1) return {
+      term: { [x.field]: { value: x.values[0] } },
+    }
+    return { terms: { [x.field]: x.values } }
+  }
+  if (x.operator === 'neq') {
+    if (x.values.length < 1) {
+      throw exception.MalformedQuery('neq value[s] required')
+    }
+    if (x.values.length === 1) return {
+      bool: { must_not: [{ term: { [x.field]: { value: x.values[0] } } }] },
+    }
+    return { bool: { must_not: [{ terms: { [x.field]: x.values } }] } }
+  }
+  if (x.operator === 'lt') {
+    if (x.values.length !== 1) {
+      throw exception.MalformedQuery('lt arguments')
+    }
+    return { range: { [x.field]: { lt: x.values[0] } } }
+  }
+  if (x.operator === 'gt') {
+    if (x.values.length !== 1) {
+      throw exception.MalformedQuery('gt arguments')
+    }
+    return { range: { [x.field]: { gt: x.values[0] } } }
+  }
+  if (x.operator === 'lte') {
+    if (x.values.length !== 1) {
+      throw exception.MalformedQuery('lte arguments')
+    }
+    return { range: { [x.field]: { lte: x.values[0] } } }
+  }
+  if (x.operator === 'gte') {
+    if (x.values.length !== 1) {
+      throw exception.MalformedQuery('gte arguments')
+    }
+    return { range: { [x.field]: { gte: x.values[0] } } }
+  }
+  if (x.operator === 'exists') return {
+    exists: { field: x.field },
+  }
+  if (x.operator === 'dne') return {
+    bool: { must_not: [{ exists: { field: x.field } }] },
+  }
+  if (x.operator === 'prefix') {
+    if (x.values.length !== 1) {
+      throw exception.MalformedQuery('prefix arguments')
+    }
+    return { prefix: { [x.field]: { value: x.values[0] } } }
+  }
+  if (x.operator === 'like') {
+    if (x.values.length !== 1) {
+      throw exception.MalformedQuery('like arguments')
+    }
+    return { match: { [x.field]: { query: x.values[0] } } }
+  }
+  if (x.operator === 'geo') {
+    if (x.values.length !== 1) {
+      throw exception.MalformedQuery('geo arguments')
+    }
+    return {
+      geo_distance: {
+        distance: x.distance,
+        [x.field]: { lat: x.lat, lon: x.lon },
+      },
+    }
+  }
+  if (x.operator === 'asc') {
+    return { [x.field]: { order: 'asc' } }
+  }
+  if (x.operator === 'desc') {
+    return { [x.field]: { order: 'desc' } }
+  }
+  if (x.operator === 'gauss') {
+    if (x.values.length !== 1) {
+      throw exception.MalformedQuery('gauss arguments')
+    }
+    return { gauss: { [x.field]: x.values[0] } }
+  }
+  if (x.operator === 'fieldValueFactor') {
+    if (x.values.length !== 1) {
+      throw exception.MalformedQuery('fieldValueFactor arguments')
+    }
+    return { fieldValueFactor: { field: x.field, ...x.values[0] } }
+  }
+  throw exception.UnsupportedSyntax(x.operator)
+}
+
+/*
+config {...} => client {...} => query {
+  filter: $ => $.and(
+    $.eq('a', 'hey'), // term
+    $.like('b', 'yo'), // match (fuzzy)
+    $.gte('c', 1), $.lte('c', 6), // range
+    $.exists('d'), // exists
+    $.or(
+      $.eq('e', 'hey', 'yo'), // terms
+      $.eq('path.to.f', 'hey', 'yo'), // nested terms
+      $.geo('g', { lat: 123, lon: 21, distance: '50mi' }), // geo distance
+    ),
+  ),
+  sort: $ => $.orderBy($.asc('c'), $.desc('d')),
+  sort: $ => $.functionScore(
+    $.gauss('l', { origin: '1998-01-01', scale: '1825d' }),
+    $.gauss('m', { origin: { lat: 34, lon: -118 }, scale: '100mi' }),
+    $.fieldValueFactor('n', { factor: 5, missing: 0, modifier: 'ln2p' }),
+  ),
+  limit: 100,
+  cursor: any|null,
+} => query_result {
+  result: [{ _id: '1', _source: {...}, [_score: 5] }],
+  cursor: any|null,
+  meta: {
+    count: 100,
+  },
+}
+*/
 const query = config => client => _.flow(
-  _.get('query'),
-  queryLexer,
+  _.map(_.flow(_.toFn, queryLexer)),
+  _.switch(
+    _.not(_.eq(_.get('filter.operator'), 'and')),
+    _.flow(_.get('filter.operator'), exception.UnsupportedSyntax, _.throw),
+    _.id,
+  ),
+  _.switch(
+    _.eq(_.get('sort.operator'), 'orderBy'),
+    _.diverge({
+      query: _.flow(_.get('filter'), toQueryDSL),
+      sort: _.flow(_.get('sort.operations'), _.map(toQueryDSL)),
+      size: _.get('limit'),
+      from: _.get('cursor'),
+    }),
+    _.eq(_.get('sort.operator'), 'functionScore'),
+    _.diverge({
+      query: _.diverge({
+        function_score: _.diverge({
+          query: _.flow(_.get('filter'), toQueryDSL),
+          functions: _.flow(_.get('sort.operations'), _.map(toQueryDSL)),
+          score_mode: _.get('score_mode', 'multiply'),
+        }),
+      }),
+      size: _.get('limit'),
+      from: _.get('cursor'),
+    }),
+    _.flow(_.get('sort.operator'), exception.UnsupportedSyntax, _.throw),
+  ),
+  client.query,
 )
 
 /*
@@ -185,5 +311,7 @@ const connectorElasticsearch = _.flow(
     free: _.apply(free),
   }),
 )
+
+connectorElasticsearch.toQueryDSL = toQueryDSL
 
 module.exports = connectorElasticsearch

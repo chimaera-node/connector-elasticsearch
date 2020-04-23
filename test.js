@@ -59,4 +59,78 @@ describe('connectorElasticsearch', () => {
 
   it('queries', () => _.flow(
   )())
+
+/* {
+  filter: {
+    operator: 'and',
+    operations: [
+      { operator: 'eq', field: 'a', values: ['hey'] },
+      { operator: 'neq', field: 'a', values: ['heya'] },
+      { operator: 'lt', field: 'b', values: [6] },
+      { operator: 'gt', field: 'c', values: [0] },
+      { operator: 'lte', field: 'd', values: [5] },
+      { operator: 'gte', field: 'e', values: [1] },
+      { operator: 'prefix', field: 'f', values: ['wazz'] },
+      {
+        operator: 'or',
+        operations: [
+          { operator: 'eq', field: 'h', values: ['yo'] },
+          { operator: 'exists', field: 'i', values: [] },
+          { operator: 'dne', field: 'j', values: [] },
+        ],
+      },
+    ],
+  },
+  sort: {
+    operator: 'orderBy',
+    operations: [
+      { operator: 'asc', field: 'b', values: [] },
+      { operator: 'desc', field: 'c', values: [] },
+    ],
+  },
+  limit: 100,
+} */
+
+  describe('toQueryDSL', () => {
+    it('transforms a lexed query object to elasticsearch query dsl - filter', () => _.flow(
+      connectorElasticsearch.toQueryDSL,
+      a.eq(_.id, {
+        bool: {
+          filter: [
+            { term: { a: { value: 'hey' } } },
+            { bool: { must_not: [{ term: { a: { value: 'heya' } } }] } },
+            { range: { b: { lt: 6 } } },
+            { range: { c: { gt: 0 } } },
+            { range: { d: { lte: 5 } } },
+            { range: { e: { gte: 1 } } },
+            { prefix: { f: { value: 'wazz' } } },
+            { dis_max: { queries: [
+              { terms: { h: ['yo', 'yoyo'] } },
+              { exists: { field: 'i' } },
+              { bool: { must_not: [{ exists: { field: 'j' } }] } },
+            ] } },
+          ],
+        },
+      }),
+    )({
+      operator: 'and',
+      operations: [
+        { operator: 'eq', field: 'a', values: ['hey'] },
+        { operator: 'neq', field: 'a', values: ['heya'] },
+        { operator: 'lt', field: 'b', values: [6] },
+        { operator: 'gt', field: 'c', values: [0] },
+        { operator: 'lte', field: 'd', values: [5] },
+        { operator: 'gte', field: 'e', values: [1] },
+        { operator: 'prefix', field: 'f', values: ['wazz'] },
+        {
+          operator: 'or',
+          operations: [
+            { operator: 'eq', field: 'h', values: ['yo', 'yoyo'] },
+            { operator: 'exists', field: 'i', values: [] },
+            { operator: 'dne', field: 'j', values: [] },
+          ],
+        },
+      ],
+    }))
+  })
 })
